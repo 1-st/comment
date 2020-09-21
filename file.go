@@ -9,12 +9,12 @@ const (
 	comment
 	rightSlash
 	rightStar
-	slashSlash //
+	slashSlash
 	commentLine
 )
 
 type Context struct {
-	Code       StateCode
+	LastState       StateCode
 	Src        *[]byte
 	Cur        int
 	Len        int
@@ -23,7 +23,7 @@ type Context struct {
 
 func GetCommentStrings(b []byte) []string {
 	s := Context{
-		Code:       text,
+		LastState:       text,
 		Src:        &b,
 		Cur:        0,
 		Len:        len(b),
@@ -31,7 +31,7 @@ func GetCommentStrings(b []byte) []string {
 	}
 	var res []string
 	for {
-		s, stop := s.next()
+		s, stop := s.scan()
 
 		if s != "" {
 			res = append(res, s)
@@ -44,83 +44,87 @@ func GetCommentStrings(b []byte) []string {
 	return res
 }
 
-func (s *Context) next() (content string, end bool) {
-	if !s.hasCur() {
-		if s.Code == rightSlash {
+func (s *Context) scan() (content string, end bool) {
+
+	if !s.hasCur() { //end of file
+		if s.LastState == rightSlash {
 			return string((*s.Src)[s.TokenStart : s.Cur-2]), true
-		} else if s.Code == commentLine {
+		} else if s.LastState == commentLine {
 			return string((*s.Src)[s.TokenStart:s.Cur]), true
 		} else {
 			return "", true
 		}
 	}
-	switch s.Code {
+
+
+	switch s.LastState {
+
 	case text:
 		if s.curWord() == '/' {
 			s.Cur++
-			s.Code = leftSlash
+			s.LastState = leftSlash
 		} else {
 			s.Cur++
 		}
 	case leftSlash:
 		if s.curWord() == '*' {
 			s.Cur++
-			s.Code = leftStar
+			s.LastState = leftStar
 		} else if s.curWord() == '/' {
 			s.Cur++
-			s.Code = slashSlash
+			s.LastState = slashSlash
 		} else {
 			s.Cur++
-			s.Code = text
+			s.LastState = text
 		}
 	case leftStar:
 		if s.curWord() == '*' {
 			s.Cur++
-			s.Code = rightStar
+			s.LastState = rightStar
 		} else {
 			s.TokenStart = s.Cur
 			s.Cur++
-			s.Code = comment
+			s.LastState = comment
 		}
 	case comment:
 		if s.curWord() == '*' {
 			s.Cur++
-			s.Code = rightStar
+			s.LastState = rightStar
 		} else {
 			s.Cur++
 		}
 	case rightStar:
 		if s.curWord() == '/' {
 			s.Cur++
-			s.Code = rightSlash
+			s.LastState = rightSlash
 		} else if s.curWord() == '*' {
 			s.Cur++
 		} else {
 			s.Cur++
-			s.Code = comment
+			s.LastState = comment
 		}
 	case rightSlash:
 		if s.curWord() == '/' {
 			s.Cur++
-			s.Code = leftSlash
+			s.LastState = leftSlash
 		} else {
 			s.Cur++
-			s.Code = text
+			s.LastState = text
 		}
 		return string((*s.Src)[s.TokenStart : s.Cur-3]), false
 	case slashSlash:
 		if s.curWord() == '\n' {
 			s.Cur++
-			s.Code = text
+			s.LastState = text
 		} else {
 			s.TokenStart = s.Cur
 			s.Cur++
-			s.Code = commentLine
+			s.LastState = commentLine
 		}
 	case commentLine:
 		if s.curWord() == '\n' {
 			s.Cur++
-			s.Code = text
+			s.LastState = text
 			return string((*s.Src)[s.TokenStart:s.Cur-1]), false
 		} else {
 			s.Cur++
