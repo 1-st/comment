@@ -81,12 +81,7 @@ func (c *Context) scan() (content Token, end bool) {
 	switch c.LastState {
 
 	case text:
-		if c.curWord() == '/' {
-			c.next()
-			c.LastState = leftSlash
-		} else {
-			c.next()
-		}
+		c.preReadText()
 	case leftSlash:
 		if c.curWord() == '*' {
 			c.next()
@@ -108,13 +103,7 @@ func (c *Context) scan() (content Token, end bool) {
 			c.LastState = comment
 		}
 	case comment:
-		for c.hasCur() && c.curWord() != '*' { // pre read
-			c.next()
-		}
-		if c.hasCur() && c.curWord() == '*' {
-			c.next()
-			c.LastState = rightStar
-		}
+		c.preReadComment()
 	case rightStar:
 		if c.curWord() == '/' {
 			c.next()
@@ -147,23 +136,50 @@ func (c *Context) scan() (content Token, end bool) {
 			c.LastState = commentLine
 		}
 	case commentLine:
-		for c.hasCur() && c.curWord() != '\n' {
-			c.next()
+		token, got := c.preReadCommentLine()
+		if got {
+			return token, false
 		}
-		if c.hasCur() && c.curWord() == '\n' {
-			c.next()
-			c.LastState = text
-			return Token{
-				Content:  string((*c.Src)[c.TokenPos.FP : c.CurPos.FP-1]),
-				Position: c.TokenPos,
-			}, false
-		}
-
 	}
 	return Token{
 		Content:  "",
 		Position: c.TokenPos,
 	}, false
+}
+
+func (c *Context) preReadText() {
+	for c.hasCur() && c.curWord() != '/' {
+		c.next()
+	}
+	if c.hasCur() && c.curWord() == '/' {
+		c.next()
+		c.LastState = leftSlash
+	}
+}
+
+func (c *Context) preReadComment() {
+	for c.hasCur() && c.curWord() != '*' {
+		c.next()
+	}
+	if c.hasCur() && c.curWord() == '*' {
+		c.next()
+		c.LastState = rightStar
+	} //else wait for next scan
+}
+
+func (c *Context) preReadCommentLine() (Token, bool) {
+	for c.hasCur() && c.curWord() != '\n' {
+		c.next()
+	}
+	if c.hasCur() && c.curWord() == '\n' {
+		c.next()
+		c.LastState = text
+		return Token{
+			Content:  string((*c.Src)[c.TokenPos.FP : c.CurPos.FP-1]),
+			Position: c.TokenPos,
+		}, true
+	} //else wait for next scan
+	return Token{}, false
 }
 
 func (c *Context) hasCur() bool {
