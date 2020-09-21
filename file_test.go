@@ -9,6 +9,7 @@ import (
 
 func TestGetCommentStrings(t *testing.T) {
 	src := []string{
+		"/*ssss",
 		"  /*ssss/*ssss*/ssss*/",
 		"    /*  ssss*  */ ",
 		"/*ssss*/",
@@ -18,6 +19,7 @@ func TestGetCommentStrings(t *testing.T) {
 		"/*ssss*/\n//sss\n",
 	}
 	results := [][]string{
+		{},
 		{
 			"ssss/*ssss",
 		},

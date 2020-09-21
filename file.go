@@ -14,7 +14,7 @@ const (
 )
 
 type Context struct {
-	LastState       StateCode
+	LastState  StateCode
 	Src        *[]byte
 	Cur        int
 	Len        int
@@ -23,7 +23,7 @@ type Context struct {
 
 func GetCommentStrings(b []byte) []string {
 	s := Context{
-		LastState:       text,
+		LastState:  text,
 		Src:        &b,
 		Cur:        0,
 		Len:        len(b),
@@ -56,7 +56,6 @@ func (s *Context) scan() (content string, end bool) {
 		}
 	}
 
-
 	switch s.LastState {
 
 	case text:
@@ -87,11 +86,12 @@ func (s *Context) scan() (content string, end bool) {
 			s.LastState = comment
 		}
 	case comment:
-		if s.curWord() == '*' {
+		for s.hasCur() && s.curWord() != '*' { // pre read
+			s.Cur++
+		}
+		if s.hasCur() && s.curWord() == '*' {
 			s.Cur++
 			s.LastState = rightStar
-		} else {
-			s.Cur++
 		}
 	case rightStar:
 		if s.curWord() == '/' {
@@ -122,13 +122,15 @@ func (s *Context) scan() (content string, end bool) {
 			s.LastState = commentLine
 		}
 	case commentLine:
-		if s.curWord() == '\n' {
-			s.Cur++
-			s.LastState = text
-			return string((*s.Src)[s.TokenStart:s.Cur-1]), false
-		} else {
+		for s.hasCur() && s.curWord() != '\n' {
 			s.Cur++
 		}
+		if s.hasCur() && s.curWord() == '\n' {
+			s.Cur++
+			s.LastState = text
+			return string((*s.Src)[s.TokenStart : s.Cur-1]), false
+		}
+
 	}
 	return "", false
 }
