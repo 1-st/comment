@@ -13,30 +13,46 @@ const (
 	commentLine
 )
 
-type Context struct {
-	LastState  StateCode
-	Src        *[]byte
-	Cur        int
-	Len        int
-	TokenStart int
+type Pos struct {
+	FP   int
+	Line int
+	Word int
 }
 
-func GetCommentStrings(b []byte) []string {
-	s := Context{
-		LastState:  text,
-		Src:        &b,
-		Cur:        0,
-		Len:        len(b),
-		TokenStart: 0,
+type Context struct {
+	LastState StateCode
+	Src       *[]byte
+	Len       int
+	TokenPos  Pos
+	CurPos    Pos
+}
+
+type Token struct {
+	Content  string
+	Position Pos
+}
+
+func GetCommentStrings(b []byte) []Token {
+	initialPos := Pos{
+		FP:   0,
+		Line: 1,
+		Word: 1,
 	}
-	var res []string
+
+	c := Context{
+		LastState: text,
+		Src:       &b,
+		Len:       len(b),
+		TokenPos:  initialPos,
+		CurPos:    initialPos,
+	}
+
+	var res []Token
 	for {
-		s, stop := s.scan()
-
-		if s != "" {
-			res = append(res, s)
+		t, stop := c.scan()
+		if t.Content != "" {
+			res = append(res, t)
 		}
-
 		if stop {
 			break
 		}
@@ -44,108 +60,133 @@ func GetCommentStrings(b []byte) []string {
 	return res
 }
 
-func (s *Context) scan() (content string, end bool) {
+func (c *Context) scan() (content Token, end bool) {
 
-	if !s.hasCur() { //end of file
-		if s.LastState == rightSlash {
-			return string((*s.Src)[s.TokenStart : s.Cur-2]), true
-		} else if s.LastState == commentLine {
-			return string((*s.Src)[s.TokenStart:s.Cur]), true
+	if !c.hasCur() { //end of file
+		if c.LastState == rightSlash {
+			return Token{
+				Content:  string((*c.Src)[c.TokenPos.FP : c.CurPos.FP-2]),
+				Position: c.TokenPos,
+			}, true
+		} else if c.LastState == commentLine {
+			return Token{
+				Content:  string((*c.Src)[c.TokenPos.FP:c.CurPos.FP]),
+				Position: c.TokenPos,
+			}, true
 		} else {
-			return "", true
+			return Token{}, true
 		}
 	}
 
-	switch s.LastState {
+	switch c.LastState {
 
 	case text:
-		if s.curWord() == '/' {
-			s.Cur++
-			s.LastState = leftSlash
+		if c.curWord() == '/' {
+			c.next()
+			c.LastState = leftSlash
 		} else {
-			s.Cur++
+			c.next()
 		}
 	case leftSlash:
-		if s.curWord() == '*' {
-			s.Cur++
-			s.LastState = leftStar
-		} else if s.curWord() == '/' {
-			s.Cur++
-			s.LastState = slashSlash
+		if c.curWord() == '*' {
+			c.next()
+			c.LastState = leftStar
+		} else if c.curWord() == '/' {
+			c.next()
+			c.LastState = slashSlash
 		} else {
-			s.Cur++
-			s.LastState = text
+			c.next()
+			c.LastState = text
 		}
 	case leftStar:
-		if s.curWord() == '*' {
-			s.Cur++
-			s.LastState = rightStar
+		if c.curWord() == '*' {
+			c.next()
+			c.LastState = rightStar
 		} else {
-			s.TokenStart = s.Cur
-			s.Cur++
-			s.LastState = comment
+			c.TokenPos = c.CurPos
+			c.next()
+			c.LastState = comment
 		}
 	case comment:
-		for s.hasCur() && s.curWord() != '*' { // pre read
-			s.Cur++
+		for c.hasCur() && c.curWord() != '*' { // pre read
+			c.next()
 		}
-		if s.hasCur() && s.curWord() == '*' {
-			s.Cur++
-			s.LastState = rightStar
+		if c.hasCur() && c.curWord() == '*' {
+			c.next()
+			c.LastState = rightStar
 		}
 	case rightStar:
-		if s.curWord() == '/' {
-			s.Cur++
-			s.LastState = rightSlash
-		} else if s.curWord() == '*' {
-			s.Cur++
+		if c.curWord() == '/' {
+			c.next()
+			c.LastState = rightSlash
+		} else if c.curWord() == '*' {
+			c.next()
 		} else {
-			s.Cur++
-			s.LastState = comment
+			c.next()
+			c.LastState = comment
 		}
 	case rightSlash:
-		if s.curWord() == '/' {
-			s.Cur++
-			s.LastState = leftSlash
+		if c.curWord() == '/' {
+			c.next()
+			c.LastState = leftSlash
 		} else {
-			s.Cur++
-			s.LastState = text
+			c.next()
+			c.LastState = text
 		}
-		return string((*s.Src)[s.TokenStart : s.Cur-3]), false
+		return Token{
+			Content:  string((*c.Src)[c.TokenPos.FP : c.CurPos.FP-3]),
+			Position: c.TokenPos,
+		}, false
 	case slashSlash:
-		if s.curWord() == '\n' {
-			s.Cur++
-			s.LastState = text
+		if c.curWord() == '\n' {
+			c.next()
+			c.LastState = text
 		} else {
-			s.TokenStart = s.Cur
-			s.Cur++
-			s.LastState = commentLine
+			c.TokenPos = c.CurPos
+			c.next()
+			c.LastState = commentLine
 		}
 	case commentLine:
-		for s.hasCur() && s.curWord() != '\n' {
-			s.Cur++
+		for c.hasCur() && c.curWord() != '\n' {
+			c.next()
 		}
-		if s.hasCur() && s.curWord() == '\n' {
-			s.Cur++
-			s.LastState = text
-			return string((*s.Src)[s.TokenStart : s.Cur-1]), false
+		if c.hasCur() && c.curWord() == '\n' {
+			c.next()
+			c.LastState = text
+			return Token{
+				Content:  string((*c.Src)[c.TokenPos.FP : c.CurPos.FP-1]),
+				Position: c.TokenPos,
+			}, false
 		}
 
 	}
-	return "", false
+	return Token{
+		Content:  "",
+		Position: c.TokenPos,
+	}, false
 }
 
-func (s *Context) hasCur() bool {
-	if s.Cur >= s.Len {
+func (c *Context) hasCur() bool {
+	if c.CurPos.FP >= c.Len {
 		return false
 	}
 	return true
 }
 
-func (s *Context) curWord() byte {
-	return (*s.Src)[s.Cur]
+func (c *Context) curWord() byte {
+	return (*c.Src)[c.CurPos.FP]
 }
 
-func (s *Context) nextWord() byte {
-	return (*s.Src)[s.Cur+1]
+func (c *Context) nextWord() byte {
+	return (*c.Src)[c.CurPos.FP+1]
+}
+
+func (c *Context) next() {
+	if (*c.Src)[c.CurPos.FP] == '\n' {
+		c.CurPos.Line++
+		c.CurPos.Word = 1
+	} else {
+		c.CurPos.Word++
+	}
+	c.CurPos.FP++
 }

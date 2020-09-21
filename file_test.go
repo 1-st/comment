@@ -48,10 +48,9 @@ func TestGetCommentStrings(t *testing.T) {
 		should := results[k]
 		match := true
 		for k, v := range res {
-			if v != should[k] {
+			if v.Content != should[k] {
 				match = false
 				pass = false
-
 			}
 		}
 		fmt.Println(res)
