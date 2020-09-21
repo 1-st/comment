@@ -5,9 +5,7 @@ import (
 	"testing"
 )
 
-/*ssss/*ssss*/
-
-func TestGetCommentStrings(t *testing.T) {
+func TestGetTokenFromBytes(t *testing.T) {
 	src := []string{
 		"/*ssss",
 		"  /*ssss/*ssss*/ssss*/",
@@ -44,7 +42,7 @@ func TestGetCommentStrings(t *testing.T) {
 	}
 	var pass = true
 	for k, v := range src {
-		res := GetCommentStrings([]byte(v))
+		res := GetTokenFromBytes([]byte(v))
 		should := results[k]
 		match := true
 		for k, v := range res {

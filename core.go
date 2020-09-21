@@ -32,7 +32,7 @@ type Token struct {
 	Position Pos
 }
 
-func GetCommentStrings(b []byte) []Token {
+func GetTokenFromBytes(b []byte) []Token {
 	initialPos := Pos{
 		FP:   0,
 		Line: 1,
